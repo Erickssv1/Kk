@@ -1,0 +1,1605 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+	<Meta name="ExplicitAutoJoints">true</Meta>
+	<Item class="Workspace" referent="RBX0">
+		<Properties>
+			<string name="Name">Workspace</string>
+		</Properties>
+		<Item class="Part" referent="RBX1">
+			<Properties>
+				<string name="Name">Baseplate</string>
+				<bool name="Anchored">true</bool>
+				<Vector3 name="size"><X>512</X><Y>20</Y><Z>512</Z></Vector3>
+				<CoordinateFrame name="CFrame"><X>0</X><Y>-10</Y><Z>0</Z><R00>1</R00><R01>0</R01><R02>0</R02><R10>0</R10><R11>1</R11><R12>0</R12><R20>0</R20><R21>0</R21><R22>1</R22></CoordinateFrame>
+			</Properties>
+		</Item>
+		<Item class="SpawnLocation" referent="RBX2">
+			<Properties>
+				<string name="Name">SpawnLocation</string>
+				<bool name="Anchored">true</bool>
+				<Vector3 name="size"><X>12</X><Y>1</Y><Z>12</Z></Vector3>
+				<CoordinateFrame name="CFrame"><X>0</X><Y>0.5</Y><Z>0</Z><R00>1</R00><R01>0</R01><R02>0</R02><R10>0</R10><R11>1</R11><R12>0</R12><R20>0</R20><R21>0</R21><R22>1</R22></CoordinateFrame>
+			</Properties>
+		</Item>
+	</Item>
+	<Item class="StarterPlayer" referent="RBX3">
+		<Properties>
+			<string name="Name">StarterPlayer</string>
+		</Properties>
+		<Item class="StarterPlayerScripts" referent="RBX4">
+			<Properties>
+				<string name="Name">StarterPlayerScripts</string>
+			</Properties>
+			<Item class="LocalScript" referent="RBX5">
+				<Properties>
+					<string name="Name">StudioExplorerUI</string>
+					<bool name="Disabled">false</bool>
+					<token name="RunContext">0</token>
+					<ProtectedString name="Source"><![CDATA[--!nonstrict
+--[[
+	================================================================
+	 STUDIO EXPLORER UI  -  LocalScript (Luau)  -  prioridade Mobile
+	================================================================
+
+	INSTALACAO
+		Coloque este script como um LocalScript em:
+		StarterPlayer > StarterPlayerScripts
+
+	O QUE ELE FAZ
+		* Recria a interface do Roblox Studio da imagem de referencia:
+		  barra de ferramentas (Select / Move / Scale / Rotate / snaps /
+		  Part / Terrain / UI / martelo / engrenagem / plugins),
+		  painel Explorer, painel Properties e a aba "<" lateral.
+		* Todos os icones sao desenhados por codigo (Frames + UICorner +
+		  UIStroke). Nenhum asset externo e necessario.
+		* FUNCIONALIDADE (somente a barra lateral Explorer):
+			- Arrastar horizontalmente para os lados: pelo cabecalho,
+			  pelo painel Properties, pela aba lateral, ou deslizando o
+			  dedo na horizontal sobre a propria lista.
+			- Rolagem vertical por toque (com inercia) e barra de rolagem
+			  grossa/azul. Gesto vertical rola a lista; gesto horizontal
+			  move o painel (o script decide pelo eixo do gesto).
+			- Ao soltar, o painel "gruda" nas bordas. Tocar na aba
+			  lateral recolhe/expande o painel.
+			- Setas das linhas expandem/recolhem filhos (mais conteudo
+			  para rolar) e tocar numa linha a destaca.
+		* Responsivo: escala automatica pelo menor lado da tela, toolbar
+		  em modo compacto (so icones) quando falta espaco, layout
+		  empilhado em telas estreitas (retrato) e reajuste ao girar.
+
+	AJUSTES RAPIDOS: veja a tabela CONFIG logo abaixo.
+]]
+
+----------------------------------------------------------------------
+-- 1. SERVICOS, CONFIGURACAO, TEMA
+----------------------------------------------------------------------
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local oldGui = playerGui:FindFirstChild("StudioExplorerUI")
+if oldGui then
+	oldGui:Destroy()
+end
+
+local CONFIG = {
+	WhiteBackdrop = false, -- true = fundo branco como na imagem de referencia
+	TapSlop = 10,          -- pixels reais de tolerancia para diferenciar toque de arraste
+	SnapDistance = 56,     -- distancia (px de design) para "grudar" nas bordas
+	HideThreshold = 40,    -- se menos que isso ficar visivel, o painel vira "recolhido"
+	TweenTime = 0.22,      -- duracao das animacoes
+}
+
+local THEME = {
+	panel = Color3.fromRGB(10, 14, 26),
+	accent = Color3.fromRGB(26, 140, 255),
+	barStroke = Color3.fromRGB(34, 44, 76),
+	text = Color3.fromRGB(245, 247, 252),
+	rowSelected = Color3.fromRGB(26, 62, 122),
+	separator = Color3.fromRGB(46, 54, 80),
+	button = Color3.fromRGB(26, 31, 46),
+	buttonStroke = Color3.fromRGB(54, 62, 88),
+	field = Color3.fromRGB(14, 20, 40),
+	fieldStroke = Color3.fromRGB(40, 58, 112),
+	divider = Color3.fromRGB(58, 66, 90),
+	info = Color3.fromRGB(176, 200, 255),
+}
+
+local C = {
+	white = Color3.fromRGB(255, 255, 255),
+	blue = Color3.fromRGB(38, 140, 255),
+	blueDark = Color3.fromRGB(28, 96, 200),
+	blueLight = Color3.fromRGB(120, 190, 255),
+	green = Color3.fromRGB(64, 200, 96),
+	greenLight = Color3.fromRGB(150, 228, 70),
+	yellow = Color3.fromRGB(255, 200, 50),
+	yellowLight = Color3.fromRGB(255, 222, 110),
+	orange = Color3.fromRGB(255, 150, 30),
+	orangeDark = Color3.fromRGB(224, 110, 0),
+	orangeLight = Color3.fromRGB(255, 184, 77),
+	red = Color3.fromRGB(240, 60, 60),
+	gray = Color3.fromRGB(150, 160, 180),
+	grayLight = Color3.fromRGB(200, 206, 218),
+	grayDark = Color3.fromRGB(110, 120, 142),
+	ink = Color3.fromRGB(60, 66, 82),
+	tan = Color3.fromRGB(240, 190, 80),
+	tanLight = Color3.fromRGB(255, 224, 130),
+}
+
+-- Medidas em "pixels de design" (a UI inteira e escalada por um UIScale)
+local METRICS = {
+	Margin = 8,
+	Gap = 8,
+	HeaderH = 46,
+	RowH = 38,
+	Indent = 22,
+	TabW = 36,
+	TabH = 96,
+	BarFullH = 72,
+	BarCompactH = 54,
+	PanelRadius = 18,
+}
+
+----------------------------------------------------------------------
+-- 2. FUNCOES AUXILIARES
+----------------------------------------------------------------------
+local function create(className, props)
+	local inst = Instance.new(className)
+	local parent = nil
+	for key, value in pairs(props) do
+		if key == "Parent" then
+			parent = value
+		else
+			inst[key] = value
+		end
+	end
+	inst.Parent = parent
+	return inst
+end
+
+local function corner(parent, radius)
+	return create("UICorner", { CornerRadius = UDim.new(0, radius), Parent = parent })
+end
+
+local function stroke(parent, color, thickness, transparency)
+	return create("UIStroke", {
+		Color = color,
+		Thickness = thickness,
+		Transparency = transparency or 0,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Parent = parent,
+	})
+end
+
+-- Brilho azul suave ao redor dos paineis (como na referencia)
+local function addGlow(frame, radius)
+	local glow = create("Frame", {
+		Name = "Glow",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(-2, -2),
+		Size = UDim2.new(1, 4, 1, 4),
+		Parent = frame,
+	})
+	corner(glow, radius + 2)
+	stroke(glow, THEME.accent, 7, 0.8)
+end
+
+----------------------------------------------------------------------
+-- 3. BIBLIOTECA DE ICONES (desenhados por codigo, grade de 28x28)
+----------------------------------------------------------------------
+-- newCanvas cria uma area quadrada e devolve funcoes de desenho que
+-- trabalham numa grade fixa de 28 unidades (escalavel para qualquer tamanho).
+local function newCanvas(parent, size)
+	local k = size / 28
+	local canvas = create("Frame", {
+		Name = "Icon",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(size, size),
+		Parent = parent,
+	})
+
+	local d = {}
+
+	function d.rect(x, y, w, h, color, radius)
+		local f = create("Frame", {
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(x * k, y * k),
+			Size = UDim2.fromOffset(w * k, h * k),
+			Parent = canvas,
+		})
+		if radius and radius > 0 then
+			corner(f, radius * k)
+		end
+		return f
+	end
+
+	function d.dot(cx, cy, r, color)
+		local f = create("Frame", {
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(cx * k, cy * k),
+			Size = UDim2.fromOffset(2 * r * k, 2 * r * k),
+			Parent = canvas,
+		})
+		create("UICorner", { CornerRadius = UDim.new(0.5, 0), Parent = f })
+		return f
+	end
+
+	-- anel: r = raio ate o centro do traco, th = espessura
+	function d.ring(cx, cy, r, th, color)
+		local inner = math.max(1, 2 * r - th)
+		local f = create("Frame", {
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(cx * k, cy * k),
+			Size = UDim2.fromOffset(inner * k, inner * k),
+			Parent = canvas,
+		})
+		create("UICorner", { CornerRadius = UDim.new(0.5, 0), Parent = f })
+		stroke(f, color, th * k)
+		return f
+	end
+
+	-- retangulo apenas com contorno (x,y,w,h = limites externos)
+	function d.box(x, y, w, h, th, color, radius)
+		local f = create("Frame", {
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset((x + th) * k, (y + th) * k),
+			Size = UDim2.fromOffset((w - 2 * th) * k, (h - 2 * th) * k),
+			Parent = canvas,
+		})
+		corner(f, math.max(0, (radius or 0) - th) * k)
+		stroke(f, color, th * k)
+		return f
+	end
+
+	function d.line(x1, y1, x2, y2, th, color)
+		local dx, dy = x2 - x1, y2 - y1
+		local len = math.sqrt(dx * dx + dy * dy)
+		local f = create("Frame", {
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset((x1 + x2) / 2 * k, (y1 + y2) / 2 * k),
+			Size = UDim2.fromOffset((len + th) * k, th * k),
+			Rotation = math.deg(math.atan2(dy, dx)),
+			Parent = canvas,
+		})
+		corner(f, th * k / 2)
+		return f
+	end
+
+	-- "V" com vertice em (ax, ay) apontando para dir
+	function d.chevron(ax, ay, arm, dir, th, color)
+		local p1, p2
+		if dir == "up" then
+			p1, p2 = { ax - arm, ay + arm }, { ax + arm, ay + arm }
+		elseif dir == "down" then
+			p1, p2 = { ax - arm, ay - arm }, { ax + arm, ay - arm }
+		elseif dir == "left" then
+			p1, p2 = { ax + arm, ay - arm }, { ax + arm, ay + arm }
+		else
+			p1, p2 = { ax - arm, ay - arm }, { ax - arm, ay + arm }
+		end
+		d.line(p1[1], p1[2], ax, ay, th, color)
+		d.line(ax, ay, p2[1], p2[2], th, color)
+	end
+
+	-- poligono preenchido (varredura em faixas horizontais)
+	function d.poly(points, color)
+		local minY, maxY = math.huge, -math.huge
+		for _, p in ipairs(points) do
+			minY = math.min(minY, p[2])
+			maxY = math.max(maxY, p[2])
+		end
+		local count = #points
+		local y = math.floor(minY)
+		while y < maxY do
+			local yc = y + 0.5
+			local xs = {}
+			for i = 1, count do
+				local a = points[i]
+				local b = points[i % count + 1]
+				local ay, by = a[2], b[2]
+				if (ay <= yc and by > yc) or (by <= yc and ay > yc) then
+					local t = (yc - ay) / (by - ay)
+					table.insert(xs, a[1] + t * (b[1] - a[1]))
+				end
+			end
+			table.sort(xs)
+			for i = 1, #xs - 1, 2 do
+				local x1, x2 = xs[i], xs[i + 1]
+				if x2 - x1 > 0.05 then
+					d.rect(x1, y, x2 - x1, 1.3, color, 0)
+				end
+			end
+			y = y + 1
+		end
+	end
+
+	function d.text(str, cx, cy, textSize, color, font)
+		return create("TextLabel", {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(cx * k, cy * k),
+			Size = UDim2.fromOffset(28 * k, 28 * k),
+			Text = str,
+			TextColor3 = color,
+			Font = font or Enum.Font.GothamBold,
+			TextSize = math.max(8, math.floor(textSize * k)),
+			Parent = canvas,
+		})
+	end
+
+	return canvas, d
+end
+
+local function buildIcon(parent, drawFn, size)
+	local canvas, d = newCanvas(parent, size)
+	drawFn(d)
+	return canvas
+end
+
+------------------------------ Icones da toolbar / UI -----------------
+local ToolIcons = {}
+
+function ToolIcons.Select(d)
+	d.poly({ { 7, 3 }, { 7, 22.5 }, { 11.8, 18.2 }, { 15.2, 25.5 }, { 18.2, 24.2 }, { 14.8, 17 }, { 21.5, 16.6 } }, C.white)
+end
+
+function ToolIcons.Move(d)
+	d.line(14, 4, 14, 24, 2.4, C.white)
+	d.line(4, 14, 24, 14, 2.4, C.white)
+	d.chevron(14, 3, 4, "up", 2.4, C.white)
+	d.chevron(14, 25, 4, "down", 2.4, C.white)
+	d.chevron(3, 14, 4, "left", 2.4, C.white)
+	d.chevron(25, 14, 4, "right", 2.4, C.white)
+end
+
+function ToolIcons.Scale(d)
+	d.box(3, 9, 17, 17, 2.4, C.white, 3)
+	d.line(9, 19, 24, 4, 2.4, C.white)
+	d.line(15.5, 4, 24, 4, 2.4, C.white)
+	d.line(24, 4, 24, 12.5, 2.4, C.white)
+end
+
+function ToolIcons.Rotate(d)
+	d.ring(14, 14, 10, 2.4, C.white)
+	d.dot(14, 14, 2.6, C.white)
+	d.chevron(18, 4.4, 3.2, "right", 2.4, C.white)
+end
+
+function ToolIcons.Part(d)
+	local p = { { 14, 2.5 }, { 24.5, 8 }, { 24.5, 20 }, { 14, 25.5 }, { 3.5, 20 }, { 3.5, 8 } }
+	for i = 1, 6 do
+		local a, b = p[i], p[i % 6 + 1]
+		d.line(a[1], a[2], b[1], b[2], 2.4, C.white)
+	end
+	d.line(14, 14, 3.5, 8, 2.4, C.white)
+	d.line(14, 14, 24.5, 8, 2.4, C.white)
+	d.line(14, 14, 14, 25.5, 2.4, C.white)
+end
+
+function ToolIcons.Terrain(d)
+	d.box(3, 4, 22, 20, 2.4, C.white, 4)
+	d.poly({ { 6, 21 }, { 11, 12.5 }, { 14.5, 18 }, { 17.5, 14 }, { 22, 21 } }, C.white)
+	d.dot(19.5, 9.5, 2.2, C.white)
+end
+
+function ToolIcons.UI(d)
+	d.text("T", 14, 14, 34, C.white, Enum.Font.GothamBold)
+end
+
+function ToolIcons.Hammer(d)
+	d.line(5, 24, 17, 12, 4.4, C.white)
+	d.line(11, 5, 23, 17, 7, C.white)
+end
+
+function ToolIcons.Gear(d)
+	d.ring(14, 14, 7, 4.6, C.white)
+	for i = 0, 7 do
+		local a = math.rad(i * 45)
+		local cs, sn = math.cos(a), math.sin(a)
+		d.line(14 + cs * 8.4, 14 + sn * 8.4, 14 + cs * 11.6, 14 + sn * 11.6, 4.2, C.white)
+	end
+end
+
+function ToolIcons.Puzzle(d)
+	d.rect(4, 9, 17, 17, C.white, 2.5)
+	d.dot(12.5, 7.5, 3.6, C.white)
+	d.dot(22.5, 17.5, 3.6, C.white)
+	d.dot(4, 17.5, 3.2, THEME.button)
+end
+
+function ToolIcons.Search(d)
+	d.ring(11.5, 11.5, 7, 2.5, C.white)
+	d.line(17, 17, 24.5, 24.5, 3, C.white)
+end
+
+function ToolIcons.Expand(d)
+	d.line(5.5, 22.5, 22.5, 5.5, 2.4, C.white)
+	d.line(14, 5, 23, 5, 2.4, C.white)
+	d.line(23, 5, 23, 14, 2.4, C.white)
+	d.line(5, 14, 5, 23, 2.4, C.white)
+	d.line(5, 23, 14, 23, 2.4, C.white)
+end
+
+function ToolIcons.ChevronDown(d)
+	d.chevron(14, 17, 7, "down", 2.6, C.white)
+end
+
+function ToolIcons.ChevronLeft(d)
+	d.chevron(10, 14, 7, "left", 3, C.white)
+end
+
+function ToolIcons.ChevronRight(d)
+	d.chevron(18, 14, 7, "right", 3, C.white)
+end
+
+function ToolIcons.Info(d)
+	d.ring(14, 14, 11.5, 2.2, THEME.info)
+	d.dot(14, 8.3, 1.5, THEME.info)
+	d.line(14, 12.3, 14, 20, 2.4, THEME.info)
+end
+
+function ToolIcons.ArrowRight(d)
+	d.poly({ { 9, 6 }, { 9, 22 }, { 21, 14 } }, C.white)
+end
+
+function ToolIcons.ArrowDown(d)
+	d.poly({ { 6, 9 }, { 22, 9 }, { 14, 21 } }, C.white)
+end
+
+------------------------------ Icones do Explorer ---------------------
+local ItemIcons = {}
+
+local function cubeIcon(top, left, right)
+	return function(d)
+		d.poly({ { 14, 2 }, { 24.5, 8 }, { 14, 14 }, { 3.5, 8 } }, top)
+		d.poly({ { 3.5, 8 }, { 14, 14 }, { 14, 26 }, { 3.5, 20 } }, left)
+		d.poly({ { 14, 14 }, { 24.5, 8 }, { 24.5, 20 }, { 14, 26 } }, right)
+	end
+end
+
+local function drawFolder(d, back, front)
+	d.rect(3, 5.5, 11, 7, back, 2.2)
+	d.rect(3, 9, 22, 16, front, 2.8)
+end
+
+function ItemIcons.Workspace(d)
+	d.dot(14, 14, 12.5, C.blue)
+	d.dot(10, 10, 5, C.green)
+	d.dot(18.5, 17, 5.2, C.green)
+	d.dot(17.5, 7.5, 2.6, C.green)
+end
+
+function ItemIcons.Players(d)
+	d.dot(18.5, 9, 4, C.orange)
+	d.rect(12.5, 15, 12, 11, C.orange, 5)
+	d.dot(9.5, 10, 4.2, C.yellow)
+	d.rect(3, 16, 13, 10, C.yellow, 5)
+end
+ItemIcons.Teams = ItemIcons.Players
+
+function ItemIcons.Lighting(d)
+	d.dot(14, 11, 8.5, C.greenLight)
+	d.rect(10, 17.5, 8, 7, C.grayLight, 2)
+	d.dot(11.2, 8.4, 2.4, Color3.fromRGB(214, 250, 170))
+end
+
+ItemIcons.MaterialService = cubeIcon(C.orangeLight, C.orange, C.orangeDark)
+
+function ItemIcons.ReplicatedFirst(d)
+	d.rect(4, 13, 20, 12, C.blueDark, 2.5)
+	d.rect(3, 9.5, 22, 5.5, C.blue, 2)
+	d.rect(12.2, 9.5, 3.6, 15.5, C.red, 0)
+	d.dot(10.5, 6.8, 3.4, C.red)
+	d.dot(17.5, 6.8, 3.4, C.red)
+end
+
+function ItemIcons.ReplicatedStorage(d)
+	d.rect(3, 7, 22, 18, C.tan, 3)
+	d.rect(3, 7, 22, 6, C.tanLight, 3)
+	d.dot(14, 18, 2.6, Color3.fromRGB(120, 80, 10))
+end
+
+function ItemIcons.StarterPack(d)
+	drawFolder(d, C.yellow, C.yellowLight)
+end
+
+function ItemIcons.StarterGui(d)
+	d.rect(3, 5, 22, 20, C.white, 3)
+	d.rect(3, 5, 22, 6.5, C.orange, 3)
+	d.rect(3, 8, 22, 3.5, C.orange, 0)
+	d.rect(6.5, 14.5, 7, 7, C.blue, 1.5)
+end
+
+function ItemIcons.StarterPlayer(d)
+	drawFolder(d, C.yellow, C.yellowLight)
+	d.dot(21, 20.5, 5.8, C.blueDark)
+	d.dot(21, 18.5, 1.8, C.white)
+	d.rect(18.6, 20.8, 4.8, 3, C.white, 1.5)
+end
+
+function ItemIcons.ServerStorage(d)
+	d.poly({ { 14, 1.5 }, { 26.5, 14 }, { 14, 26.5 }, { 1.5, 14 } }, C.green)
+	d.poly({ { 14, 8 }, { 20, 14 }, { 14, 20 }, { 8, 14 } }, C.blue)
+end
+
+function ItemIcons.Script(d)
+	d.rect(5, 3, 18, 22, C.white, 2.5)
+	d.line(9, 9, 19, 9, 2, C.blue)
+	d.line(9, 14, 19, 14, 2, C.blue)
+	d.line(9, 19, 15, 19, 2, C.blue)
+end
+
+function ItemIcons.ServerScriptService(d)
+	ItemIcons.Script(d)
+	d.dot(21.5, 21.5, 5.6, C.blueDark)
+	d.dot(21.5, 21.5, 2.2, C.white)
+end
+
+function ItemIcons.SoundService(d)
+	d.rect(3, 10.5, 5, 7, C.white, 1.5)
+	d.poly({ { 7, 10.5 }, { 15, 4 }, { 15, 24 }, { 7, 17.5 } }, C.white)
+	d.chevron(18.5, 14, 3.4, "right", 2.2, C.white)
+	d.chevron(22.5, 14, 6.4, "right", 2.2, C.white)
+end
+
+function ItemIcons.Chat(d)
+	d.rect(2.5, 4, 23, 16, C.white, 6)
+	d.poly({ { 7, 19 }, { 7, 26 }, { 14, 19 } }, C.white)
+	d.dot(8.5, 12, 1.7, C.ink)
+	d.dot(14, 12, 1.7, C.ink)
+	d.dot(19.5, 12, 1.7, C.ink)
+end
+
+function ItemIcons.TextChatService(d)
+	d.rect(9, 9.5, 18, 13, C.gray, 5)
+	d.poly({ { 23, 22 }, { 23, 27 }, { 18, 22 } }, C.gray)
+	d.rect(1.5, 2.5, 18, 13.5, C.white, 5)
+	d.poly({ { 5, 15 }, { 5, 21 }, { 11, 15 } }, C.white)
+	d.dot(7, 9.2, 1.5, C.ink)
+	d.dot(10.5, 9.2, 1.5, C.ink)
+	d.dot(14, 9.2, 1.5, C.ink)
+end
+
+function ItemIcons.Generic(d)
+	d.rect(3, 3, 22, 22, C.grayDark, 5)
+	d.ring(14, 14, 5.5, 2.6, C.white)
+end
+
+function ItemIcons.Camera(d)
+	d.rect(8, 4.5, 8, 5, C.gray, 1.5)
+	d.rect(3, 8, 22, 16, C.gray, 3.5)
+	d.dot(14, 16, 5.2, C.ink)
+	d.dot(14, 16, 2.4, C.blueLight)
+end
+
+ItemIcons.Terrain = cubeIcon(Color3.fromRGB(120, 220, 130), C.green, Color3.fromRGB(40, 150, 70))
+ItemIcons.Part = cubeIcon(C.grayLight, C.gray, C.grayDark)
+ItemIcons.Spawn = ItemIcons.Part
+
+function ItemIcons.Player(d)
+	d.dot(14, 8.5, 5, C.yellow)
+	d.rect(6, 15.5, 16, 10.5, C.yellow, 6)
+end
+
+function ItemIcons.Atmosphere(d)
+	d.dot(9.5, 16, 5, C.blueLight)
+	d.dot(15.5, 12, 6.5, C.blueLight)
+	d.dot(21, 16.5, 4.5, C.blueLight)
+	d.rect(9.5, 15, 11.5, 6, C.blueLight, 0)
+end
+
+function ItemIcons.Sky(d)
+	d.dot(14, 14, 12, Color3.fromRGB(110, 185, 255))
+	d.dot(18.5, 9.5, 3.6, Color3.fromRGB(255, 232, 120))
+end
+
+function ItemIcons.Folder(d)
+	drawFolder(d, C.grayDark, C.gray)
+end
+
+----------------------------------------------------------------------
+-- 4. DADOS DO EXPLORER
+----------------------------------------------------------------------
+local EXPLORER_TREE = {
+	{ name = "Workspace", icon = "Workspace", children = {
+		{ name = "Camera", icon = "Camera" },
+		{ name = "Terrain", icon = "Terrain" },
+		{ name = "Baseplate", icon = "Part" },
+		{ name = "SpawnLocation", icon = "Spawn" },
+	} },
+	{ name = "Players", icon = "Players", children = {
+		{ name = player.Name, icon = "Player" },
+	} },
+	{ name = "Lighting", icon = "Lighting", children = {
+		{ name = "Atmosphere", icon = "Atmosphere" },
+		{ name = "Sky", icon = "Sky" },
+	} },
+	{ name = "MaterialService", icon = "MaterialService" },
+	{ name = "ReplicatedFirst", icon = "ReplicatedFirst", children = {
+		{ name = "LoadingScript", icon = "Script" },
+	} },
+	{ name = "ReplicatedStorage", icon = "ReplicatedStorage" },
+	{ name = "StarterPack", icon = "StarterPack" },
+	{ name = "StarterGui", icon = "StarterGui" },
+	{ name = "StarterPlayer", icon = "StarterPlayer" },
+	{ name = "Teams", icon = "Teams" },
+	{ name = "ServerStorage", icon = "ServerStorage" },
+	{ name = "ServerScriptService", icon = "ServerScriptService" },
+	{ name = "SoundService", icon = "SoundService" },
+	{ name = "Chat", icon = "Chat" },
+	{ name = "TextChatService", icon = "TextChatService", children = {
+		{ name = "ChatWindowConfiguration", icon = "Generic" },
+		{ name = "ChatInputBarConfiguration", icon = "Generic" },
+		{ name = "TextChannels", icon = "Folder" },
+	} },
+	{ name = "VoiceChatService", icon = "Generic" },
+	{ name = "LocalizationService", icon = "Generic" },
+	{ name = "TestService", icon = "Generic" },
+}
+
+----------------------------------------------------------------------
+-- 5. CONSTRUCAO DA INTERFACE
+----------------------------------------------------------------------
+local gui = create("ScreenGui", {
+	Name = "StudioExplorerUI",
+	ResetOnSpawn = false,
+	IgnoreGuiInset = false,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	DisplayOrder = 50,
+	Parent = playerGui,
+})
+
+if CONFIG.WhiteBackdrop then
+	create("Frame", {
+		Name = "Backdrop",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 0,
+		Parent = gui,
+	})
+end
+
+-- "root" tem o tamanho da tela dividido pela escala; todo o layout usa
+-- pixels de design dentro dele.
+local root = create("Frame", {
+	Name = "Root",
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	Size = UDim2.fromScale(1, 1),
+	ZIndex = 1,
+	Parent = gui,
+})
+local uiScale = create("UIScale", { Scale = 1, Parent = root })
+
+------------------------------ 5.1 Toolbar -----------------------------
+local toolbarHolder = create("Frame", {
+	Name = "ToolbarHolder",
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	Parent = root,
+})
+local bar = create("Frame", {
+	Name = "Toolbar",
+	BackgroundColor3 = THEME.panel,
+	BorderSizePixel = 0,
+	Active = true,
+	Parent = toolbarHolder,
+})
+corner(bar, 18)
+stroke(bar, THEME.barStroke, 1.5)
+local barScale = create("UIScale", { Scale = 1, Parent = bar })
+create("UIPadding", {
+	PaddingLeft = UDim.new(0, 8),
+	PaddingRight = UDim.new(0, 8),
+	Parent = bar,
+})
+create("UIListLayout", {
+	FillDirection = Enum.FillDirection.Horizontal,
+	SortOrder = Enum.SortOrder.LayoutOrder,
+	HorizontalAlignment = Enum.HorizontalAlignment.Left,
+	VerticalAlignment = Enum.VerticalAlignment.Center,
+	Padding = UDim.new(0, 0),
+	Parent = bar,
+})
+
+local toolbarItems = {}
+
+local function addItem(frame, fullW, compactW, apply)
+	frame.LayoutOrder = #toolbarItems + 1
+	table.insert(toolbarItems, { frame = frame, fullW = fullW, compactW = compactW, apply = apply })
+end
+
+local function toolbarWidth(compact)
+	local w = 16 -- padding lateral da barra
+	for _, item in ipairs(toolbarItems) do
+		w = w + (compact and item.compactW or item.fullW)
+	end
+	return w
+end
+
+local function setToolbarMode(compact)
+	local barH = compact and METRICS.BarCompactH or METRICS.BarFullH
+	for _, item in ipairs(toolbarItems) do
+		item.frame.Size = UDim2.fromOffset(compact and item.compactW or item.fullW, barH)
+		if item.apply then
+			item.apply(compact)
+		end
+	end
+end
+
+local function addTool(label, drawFn)
+	local f = create("Frame", { Name = label, BackgroundTransparency = 1, BorderSizePixel = 0, Parent = bar })
+	local iconHolder = create("Frame", {
+		Name = "IconHolder",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(30, 30),
+		Parent = f,
+	})
+	buildIcon(iconHolder, drawFn, 30)
+	local lbl = create("TextLabel", {
+		Name = "Label",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -6),
+		Size = UDim2.new(1, 0, 0, 18),
+		Text = label,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 15,
+		TextColor3 = THEME.text,
+		Parent = f,
+	})
+	addItem(f, 78, 42, function(compact)
+		if compact then
+			iconHolder.Position = UDim2.fromScale(0.5, 0.5)
+		else
+			iconHolder.Position = UDim2.new(0.5, 0, 0, 24)
+		end
+		lbl.Visible = not compact
+	end)
+end
+
+local function addSeparator(strong)
+	local f = create("Frame", { Name = "Separator", BackgroundTransparency = 1, BorderSizePixel = 0, Parent = bar })
+	create("Frame", {
+		BackgroundColor3 = THEME.separator,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(0, strong and 2 or 1.5, strong and 0.62 or 0.5, 0),
+		Parent = f,
+	})
+	addItem(f, strong and 14 or 11, strong and 10 or 7)
+end
+
+local function addSnapGroup()
+	local f = create("Frame", { Name = "SnapControls", BackgroundTransparency = 1, BorderSizePixel = 0, Parent = bar })
+	create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Vertical,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 4),
+		Parent = f,
+	})
+
+	local rows = {}
+	local function makeRow(order, drawFn, value)
+		local row = create("Frame", {
+			Name = "Row" .. order,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			LayoutOrder = order,
+			Size = UDim2.new(1, -8, 0, 28),
+			Parent = f,
+		})
+		local iconHolder = create("Frame", {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 2, 0.5, 0),
+			Size = UDim2.fromOffset(22, 22),
+			Parent = row,
+		})
+		buildIcon(iconHolder, drawFn, 22)
+		local field = create("Frame", {
+			BackgroundColor3 = THEME.field,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(32, 0),
+			Size = UDim2.new(1, -32, 1, 0),
+			Parent = row,
+		})
+		corner(field, 9)
+		stroke(field, THEME.fieldStroke, 1.5)
+		local valueLabel = create("TextLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, -24, 1, 0),
+			Text = value,
+			Font = Enum.Font.GothamBold,
+			TextSize = 17,
+			TextColor3 = THEME.text,
+			Parent = field,
+		})
+		local chevHolder = create("Frame", {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -5, 0.5, 0),
+			Size = UDim2.fromOffset(16, 16),
+			Parent = field,
+		})
+		buildIcon(chevHolder, ToolIcons.ChevronDown, 16)
+		table.insert(rows, { row = row, label = valueLabel })
+	end
+	makeRow(1, ToolIcons.Move, "1")
+	makeRow(2, ToolIcons.Rotate, "5")
+
+	addItem(f, 150, 112, function(compact)
+		for _, r in ipairs(rows) do
+			r.row.Size = UDim2.new(1, -8, 0, compact and 22 or 28)
+			r.label.TextSize = compact and 15 or 17
+		end
+	end)
+end
+
+local function addHammer()
+	local f = create("Frame", { Name = "BuildTools", BackgroundTransparency = 1, BorderSizePixel = 0, Parent = bar })
+	local iconHolder = create("Frame", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.38, 0, 0.5, 0),
+		Size = UDim2.fromOffset(30, 30),
+		Parent = f,
+	})
+	buildIcon(iconHolder, ToolIcons.Hammer, 30)
+	local chevHolder = create("Frame", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -4, 0.5, 2),
+		Size = UDim2.fromOffset(16, 16),
+		Parent = f,
+	})
+	buildIcon(chevHolder, ToolIcons.ChevronDown, 16)
+	addItem(f, 84, 58)
+end
+
+local function addRoundButton(name, drawFn)
+	local f = create("Frame", { Name = name, BackgroundTransparency = 1, BorderSizePixel = 0, Parent = bar })
+	local btn = create("Frame", {
+		BackgroundColor3 = THEME.button,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(46, 46),
+		Parent = f,
+	})
+	corner(btn, 12)
+	stroke(btn, THEME.buttonStroke, 1.5)
+	local iconHolder = create("Frame", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(28, 28),
+		Parent = btn,
+	})
+	buildIcon(iconHolder, drawFn, 28)
+	addItem(f, 54, 48, function(compact)
+		local s = compact and 40 or 46
+		btn.Size = UDim2.fromOffset(s, s)
+	end)
+end
+
+addTool("Select", ToolIcons.Select)
+addSeparator(false)
+addTool("Move", ToolIcons.Move)
+addSeparator(false)
+addTool("Scale", ToolIcons.Scale)
+addSeparator(false)
+addTool("Rotate", ToolIcons.Rotate)
+addSeparator(true)
+addSnapGroup()
+addSeparator(true)
+addTool("Part", ToolIcons.Part)
+addSeparator(false)
+addTool("Terrain", ToolIcons.Terrain)
+addSeparator(false)
+addTool("UI", ToolIcons.UI)
+addSeparator(true)
+addHammer()
+addRoundButton("Settings", ToolIcons.Gear)
+addRoundButton("Plugins", ToolIcons.Puzzle)
+
+------------------------------ 5.2 Barra lateral -----------------------
+local sidebar = create("Frame", {
+	Name = "Sidebar",
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	ZIndex = 2,
+	Parent = root,
+})
+
+local function styledPanel(name)
+	local panel = create("Frame", {
+		Name = name,
+		BackgroundColor3 = THEME.panel,
+		BorderSizePixel = 0,
+		Active = true,
+		Parent = sidebar,
+	})
+	corner(panel, METRICS.PanelRadius)
+	addGlow(panel, METRICS.PanelRadius)
+	stroke(panel, THEME.accent, 2.5)
+	return panel
+end
+
+local function buildHeader(panel, title, withDivider)
+	local header = create("Frame", {
+		Name = "Header",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Active = true,
+		Size = UDim2.new(1, 0, 0, METRICS.HeaderH),
+		Parent = panel,
+	})
+	local titleGroup = create("Frame", {
+		Name = "TitleGroup",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Position = UDim2.fromOffset(18, 0),
+		Size = UDim2.new(0, 0, 1, 0),
+		Parent = header,
+	})
+	create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 8),
+		Parent = titleGroup,
+	})
+	create("TextLabel", {
+		Name = "Title",
+		LayoutOrder = 1,
+		BackgroundTransparency = 1,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 1, 0),
+		Text = title,
+		Font = Enum.Font.GothamBold,
+		TextSize = 21,
+		TextColor3 = THEME.text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = titleGroup,
+	})
+	local dropdown = create("Frame", {
+		Name = "Dropdown",
+		LayoutOrder = 2,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(20, 20),
+		Parent = titleGroup,
+	})
+	buildIcon(dropdown, ToolIcons.ChevronDown, 20)
+
+	local expand = create("Frame", {
+		Name = "ExpandIcon",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -16, 0.5, 0),
+		Size = UDim2.fromOffset(26, 26),
+		Parent = header,
+	})
+	buildIcon(expand, ToolIcons.Expand, 26)
+	local search = create("Frame", {
+		Name = "SearchIcon",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -52, 0.5, 0),
+		Size = UDim2.fromOffset(26, 26),
+		Parent = header,
+	})
+	buildIcon(search, ToolIcons.Search, 26)
+
+	if withDivider then
+		create("Frame", {
+			Name = "Divider",
+			BackgroundColor3 = THEME.divider,
+			BorderSizePixel = 0,
+			Position = UDim2.new(0, 16, 1, -2),
+			Size = UDim2.new(1, -32, 0, 1.5),
+			Parent = header,
+		})
+	end
+	return header
+end
+
+-- Explorer
+local explorer = styledPanel("Explorer")
+local explorerHeader = buildHeader(explorer, "Explorer", false)
+
+local scroll = create("ScrollingFrame", {
+	Name = "List",
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	Active = true,
+	Position = UDim2.fromOffset(8, METRICS.HeaderH),
+	Size = UDim2.new(1, -14, 1, -(METRICS.HeaderH + 10)),
+	CanvasSize = UDim2.new(0, 0, 0, 0),
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	ScrollingDirection = Enum.ScrollingDirection.Y,
+	ScrollBarThickness = 10,
+	ScrollBarImageColor3 = THEME.accent,
+	ScrollBarImageTransparency = 0,
+	VerticalScrollBarInset = Enum.ScrollBarInset.Always,
+	VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Right,
+	ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
+	ScrollingEnabled = true,
+	Parent = explorer,
+})
+create("UIListLayout", {
+	SortOrder = Enum.SortOrder.LayoutOrder,
+	Padding = UDim.new(0, 0),
+	Parent = scroll,
+})
+create("UIPadding", { PaddingBottom = UDim.new(0, 8), Parent = scroll })
+
+-- Properties
+local props = styledPanel("Properties")
+local propsHeader = buildHeader(props, "Properties", true)
+local propsBody = create("Frame", {
+	Name = "Body",
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	Position = UDim2.fromOffset(0, METRICS.HeaderH),
+	Size = UDim2.new(1, 0, 1, -METRICS.HeaderH),
+	Parent = props,
+})
+create("UIListLayout", {
+	FillDirection = Enum.FillDirection.Vertical,
+	SortOrder = Enum.SortOrder.LayoutOrder,
+	HorizontalAlignment = Enum.HorizontalAlignment.Center,
+	VerticalAlignment = Enum.VerticalAlignment.Center,
+	Padding = UDim.new(0, 6),
+	Parent = propsBody,
+})
+local infoHolder = create("Frame", {
+	LayoutOrder = 1,
+	BackgroundTransparency = 1,
+	Size = UDim2.fromOffset(34, 34),
+	Parent = propsBody,
+})
+buildIcon(infoHolder, ToolIcons.Info, 34)
+create("TextLabel", {
+	LayoutOrder = 2,
+	BackgroundTransparency = 1,
+	AutomaticSize = Enum.AutomaticSize.Y,
+	Size = UDim2.new(1, -28, 0, 0),
+	Text = "Select an object to view its properties",
+	Font = Enum.Font.GothamMedium,
+	TextSize = 17,
+	TextColor3 = THEME.text,
+	TextWrapped = true,
+	TextXAlignment = Enum.TextXAlignment.Center,
+	Parent = propsBody,
+})
+
+-- Aba lateral "<" (alca de arraste / recolher)
+local tab = create("Frame", {
+	Name = "CollapseTab",
+	BackgroundColor3 = THEME.panel,
+	BorderSizePixel = 0,
+	Active = true,
+	Size = UDim2.fromOffset(METRICS.TabW, METRICS.TabH),
+	Parent = sidebar,
+})
+corner(tab, 14)
+addGlow(tab, 14)
+stroke(tab, THEME.accent, 2.5)
+local tabIconHolder = create("Frame", {
+	BackgroundTransparency = 1,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(26, 26),
+	Parent = tab,
+})
+local chevLeft = buildIcon(tabIconHolder, ToolIcons.ChevronLeft, 26)
+local chevRight = buildIcon(tabIconHolder, ToolIcons.ChevronRight, 26)
+chevRight.Visible = false
+
+----------------------------------------------------------------------
+-- 6. LAYOUT RESPONSIVO
+----------------------------------------------------------------------
+local function measureScreen()
+	local size = gui.AbsoluteSize
+	if size.X < 50 or size.Y < 50 then
+		local cam = workspace.CurrentCamera
+		size = cam and cam.ViewportSize or Vector2.new(1280, 720)
+	end
+	return size
+end
+
+local function computeLayout()
+	local screen = measureScreen()
+	local M = METRICS.Margin
+
+	-- escala pelo menor lado: linhas ~32px em celulares, maiores em tablets
+	local scale = math.clamp(math.min(screen.X, screen.Y) / 420, 0.8, 1.35)
+	local W, H = screen.X / scale, screen.Y / scale
+
+	local sidebarW = math.min(math.clamp(math.floor(W * 0.30), 280, 340), W - 2 * M)
+
+	-- toolbar: completa, compacta (so icones) ou compacta reduzida
+	local fullW, compactW = toolbarWidth(false), toolbarWidth(true)
+	local wideAvail = W - sidebarW - 3 * M
+	local stacked = wideAvail < compactW * 0.9 -- tela estreita: toolbar em cima, painel abaixo
+	local avail = stacked and (W - 2 * M) or wideAvail
+	local compact = avail < fullW
+	local natural = compact and compactW or fullW
+	local ts = math.clamp(avail / natural, 0.55, 1)
+	local barH = compact and METRICS.BarCompactH or METRICS.BarFullH
+	local tbW, tbH = natural * ts, barH * ts
+	local tbX
+	if stacked then
+		tbX = math.floor((W - tbW) / 2)
+	else
+		tbX = math.max(M, W - sidebarW - 2 * M - tbW)
+	end
+
+	local top = stacked and (M + tbH + M) or M
+	local totalH = math.max(260, H - top - M)
+	local propH = math.clamp(math.floor(totalH * 0.30), 130, 260)
+	local explH = totalH - propH - METRICS.Gap
+	if explH < 170 then
+		explH = 170
+		propH = math.max(100, totalH - explH - METRICS.Gap)
+	end
+
+	return {
+		scale = scale,
+		W = W,
+		H = H,
+		sidebarW = sidebarW,
+		totalH = totalH,
+		explH = explH,
+		propH = propH,
+		top = top,
+		compact = compact,
+		natural = natural,
+		barH = barH,
+		ts = ts,
+		tbX = tbX,
+		tbW = tbW,
+		tbH = tbH,
+		minX = -sidebarW - 2,
+		maxX = W + 2,
+	}
+end
+
+----------------------------------------------------------------------
+-- 7. MOVIMENTO DA BARRA LATERAL (arraste horizontal, encaixe, recolher)
+----------------------------------------------------------------------
+local L = nil -- layout atual
+local state = {
+	x = 0,             -- posicao X (px de design) da borda esquerda do painel
+	dock = "right",    -- "right" | "left" | "free"
+	collapsed = false, -- painel escondido, so a aba aparece
+	tabSide = "left",  -- lado do painel em que a aba fica (voltada ao centro)
+}
+local activeTween = nil
+local suppressTapUntil = 0 -- evita "toque fantasma" em linhas apos um arraste
+
+local function dockedX(side)
+	if side == "right" then
+		return L.W - L.sidebarW - METRICS.Margin
+	end
+	return METRICS.Margin
+end
+
+local function hiddenX(side)
+	if side == "right" then
+		return L.W + 2
+	end
+	return -L.sidebarW - 2
+end
+
+local function setX(x)
+	x = math.clamp(x, L.minX, L.maxX)
+	state.x = x
+	sidebar.Position = UDim2.fromOffset(x, L.top)
+end
+
+local function cancelTween()
+	if activeTween then
+		activeTween:Cancel()
+		activeTween = nil
+	end
+end
+
+local function tweenToX(x)
+	cancelTween()
+	x = math.clamp(x, L.minX, L.maxX)
+	state.x = x
+	activeTween = TweenService:Create(
+		sidebar,
+		TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ Position = UDim2.fromOffset(x, L.top) }
+	)
+	activeTween:Play()
+end
+
+local function updateTab()
+	local onLeft = state.tabSide == "left"
+	local tabX = onLeft and -(METRICS.TabW + 4) or (L.sidebarW + 4)
+	tab.Position = UDim2.fromOffset(tabX, math.floor(L.explH / 2 - METRICS.TabH / 2))
+	chevLeft.Visible = onLeft   -- "<" quando o painel esta a direita
+	chevRight.Visible = not onLeft
+end
+
+-- Chamado ao soltar o painel depois de arrastar
+local function settle()
+	local center = state.x + L.sidebarW / 2
+	state.tabSide = (center < L.W / 2) and "right" or "left"
+	local panelSide = (state.tabSide == "left") and "right" or "left"
+
+	local visible = math.min(state.x + L.sidebarW, L.W) - math.max(state.x, 0)
+	if visible < CONFIG.HideThreshold then
+		state.collapsed = true
+		state.dock = panelSide
+		tweenToX(hiddenX(panelSide))
+	else
+		state.collapsed = false
+		local target = state.x
+		local rightX, leftX = dockedX("right"), dockedX("left")
+		if math.abs(state.x - rightX) <= CONFIG.SnapDistance then
+			target = rightX
+			state.dock = "right"
+			state.tabSide = "left"
+		elseif math.abs(state.x - leftX) <= CONFIG.SnapDistance then
+			target = leftX
+			state.dock = "left"
+			state.tabSide = "right"
+		else
+			state.dock = "free"
+		end
+		tweenToX(target)
+	end
+	updateTab()
+end
+
+local function toggleCollapsed()
+	local side = (state.tabSide == "left") and "right" or "left"
+	if state.collapsed then
+		state.collapsed = false
+		state.dock = side
+		tweenToX(dockedX(side))
+	else
+		state.collapsed = true
+		state.dock = side
+		tweenToX(hiddenX(side))
+	end
+end
+
+-- Reposiciona o painel segundo o estado atual (apos girar a tela, etc.)
+local function placeFromState()
+	cancelTween()
+	local x
+	if state.collapsed then
+		local side = (state.tabSide == "left") and "right" or "left"
+		x = hiddenX(side)
+	elseif state.dock == "right" then
+		state.tabSide = "left"
+		x = dockedX("right")
+	elseif state.dock == "left" then
+		state.tabSide = "right"
+		x = dockedX("left")
+	else
+		x = math.clamp(state.x, -L.sidebarW + 80, L.W - 80)
+		state.tabSide = ((x + L.sidebarW / 2) < L.W / 2) and "right" or "left"
+	end
+	setX(x)
+end
+
+local function applyLayout()
+	L = computeLayout()
+	uiScale.Scale = L.scale
+	root.Size = UDim2.fromOffset(L.W, L.H)
+
+	setToolbarMode(L.compact)
+	toolbarHolder.Position = UDim2.fromOffset(L.tbX, METRICS.Margin)
+	toolbarHolder.Size = UDim2.fromOffset(L.tbW, L.tbH)
+	bar.Size = UDim2.fromOffset(L.natural, L.barH)
+	barScale.Scale = L.ts
+
+	sidebar.Size = UDim2.fromOffset(L.sidebarW, L.totalH)
+	explorer.Position = UDim2.fromOffset(0, 0)
+	explorer.Size = UDim2.new(1, 0, 0, L.explH)
+	props.Position = UDim2.fromOffset(0, L.explH + METRICS.Gap)
+	props.Size = UDim2.new(1, 0, 0, L.propH)
+
+	placeFromState()
+	updateTab()
+end
+
+------------------------------ Controle de arraste ---------------------
+-- Fontes de arraste: "header" (cabecalhos / Properties), "tab" (aba lateral)
+-- e "list" (deslizar sobre a lista: so move o painel se o gesto for
+-- horizontal; se for vertical, a lista rola normalmente).
+local drag = {
+	input = nil,
+	source = "",
+	startPos = Vector3.new(),
+	startX = 0,
+	moved = false,
+	cancelled = false,
+}
+
+local function beginPointer(input, source)
+	local t = input.UserInputType
+	if t ~= Enum.UserInputType.MouseButton1 and t ~= Enum.UserInputType.Touch then
+		return
+	end
+	if drag.input then
+		return
+	end
+	drag.input = input
+	drag.source = source
+	drag.startPos = input.Position
+	drag.startX = sidebar.Position.X.Offset
+	drag.moved = false
+	drag.cancelled = false
+end
+
+local function endPointer()
+	if not drag.input then
+		return
+	end
+	local moved, cancelled, source = drag.moved, drag.cancelled, drag.source
+	drag.input = nil
+	drag.moved = false
+	drag.cancelled = false
+	scroll.ScrollingEnabled = true
+
+	if moved or cancelled then
+		suppressTapUntil = os.clock() + 0.25
+	end
+	if moved then
+		settle()
+	elseif not cancelled and source == "tab" then
+		toggleCollapsed()
+	end
+end
+
+local function onInputChanged(input)
+	local current = drag.input
+	if not current or drag.cancelled then
+		return
+	end
+	local isMouse = current.UserInputType == Enum.UserInputType.MouseButton1
+		and input.UserInputType == Enum.UserInputType.MouseMovement
+	local isTouch = current.UserInputType == Enum.UserInputType.Touch and input == current
+	if not (isMouse or isTouch) then
+		return
+	end
+
+	local pos = input.Position
+	if not drag.moved then
+		local dx, dy = pos.X - drag.startPos.X, pos.Y - drag.startPos.Y
+		if math.max(math.abs(dx), math.abs(dy)) < CONFIG.TapSlop then
+			return
+		end
+		suppressTapUntil = math.huge
+		if drag.source == "list" and math.abs(dy) >= math.abs(dx) then
+			drag.cancelled = true -- gesto vertical: deixa o ScrollingFrame rolar
+			return
+		end
+		drag.moved = true
+		if drag.source == "list" then
+			scroll.ScrollingEnabled = false -- gesto horizontal: trava a rolagem
+		end
+		cancelTween()
+		drag.startPos = pos
+		drag.startX = sidebar.Position.X.Offset
+		return
+	end
+
+	setX(drag.startX + (pos.X - drag.startPos.X) / L.scale)
+end
+
+local function onInputEnded(input)
+	local current = drag.input
+	if not current then
+		return
+	end
+	local sameTouch = input == current
+	local mouseUp = input.UserInputType == Enum.UserInputType.MouseButton1
+		and current.UserInputType == Enum.UserInputType.MouseButton1
+	if sameTouch or mouseUp then
+		endPointer()
+	end
+end
+
+----------------------------------------------------------------------
+-- 8. LISTA DO EXPLORER (linhas, setas de expandir, selecao)
+----------------------------------------------------------------------
+local flat = {}
+local selectedEntry = nil
+
+local function refreshVisibility()
+	for _, entry in ipairs(flat) do
+		local visible = true
+		local p = entry.parent
+		while p do
+			if not p.expanded then
+				visible = false
+				break
+			end
+			p = p.parent
+		end
+		entry.row.Visible = visible
+	end
+end
+
+local function toggleEntry(entry)
+	if os.clock() < suppressTapUntil then
+		return
+	end
+	entry.expanded = not entry.expanded
+	entry.arrowRight.Visible = not entry.expanded
+	entry.arrowDown.Visible = entry.expanded
+	refreshVisibility()
+end
+
+local function selectEntry(entry)
+	if os.clock() < suppressTapUntil then
+		return
+	end
+	if selectedEntry then
+		selectedEntry.row.BackgroundTransparency = 1
+	end
+	selectedEntry = entry
+	entry.row.BackgroundTransparency = 0
+end
+
+local function buildRow(entry)
+	local node = entry.node
+	local pad = entry.depth * METRICS.Indent
+
+	local row = create("TextButton", {
+		Name = node.name,
+		Text = "",
+		AutoButtonColor = false,
+		BorderSizePixel = 0,
+		BackgroundColor3 = THEME.rowSelected,
+		BackgroundTransparency = 1,
+		LayoutOrder = entry.order,
+		Size = UDim2.new(1, 0, 0, METRICS.RowH),
+		Parent = scroll,
+	})
+	corner(row, 8)
+	entry.row = row
+
+	if entry.hasChildren then
+		-- area de toque generosa para a seta (40 x 38)
+		local arrowBtn = create("TextButton", {
+			Name = "Arrow",
+			Text = "",
+			AutoButtonColor = false,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(pad + 2, 0),
+			Size = UDim2.fromOffset(40, METRICS.RowH),
+			Parent = row,
+		})
+		local holder = create("Frame", {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(16, 16),
+			Parent = arrowBtn,
+		})
+		entry.arrowRight = buildIcon(holder, ToolIcons.ArrowRight, 16)
+		entry.arrowDown = buildIcon(holder, ToolIcons.ArrowDown, 16)
+		entry.arrowDown.Visible = false
+		arrowBtn.Activated:Connect(function()
+			toggleEntry(entry)
+		end)
+		arrowBtn.InputBegan:Connect(function(input)
+			beginPointer(input, "list")
+		end)
+	end
+
+	local iconHolder = create("Frame", {
+		Name = "IconHolder",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, pad + 44, 0.5, 0),
+		Size = UDim2.fromOffset(28, 28),
+		Parent = row,
+	})
+	buildIcon(iconHolder, ItemIcons[node.icon] or ItemIcons.Generic, 28)
+
+	create("TextLabel", {
+		Name = "Label",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(pad + 82, 0),
+		Size = UDim2.new(1, -(pad + 88), 1, 0),
+		Text = node.name,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 17,
+		TextColor3 = THEME.text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = row,
+	})
+
+	row.Activated:Connect(function()
+		selectEntry(entry)
+	end)
+	row.InputBegan:Connect(function(input)
+		beginPointer(input, "list")
+	end)
+end
+
+local function addNodes(nodes, depth, parentEntry)
+	for _, node in ipairs(nodes) do
+		local entry = {
+			node = node,
+			depth = depth,
+			parent = parentEntry,
+			expanded = false,
+			hasChildren = node.children ~= nil and #node.children > 0,
+		}
+		table.insert(flat, entry)
+		entry.order = #flat
+		buildRow(entry)
+		if entry.hasChildren then
+			addNodes(node.children, depth + 1, entry)
+		end
+	end
+end
+
+----------------------------------------------------------------------
+-- 9. LIGACOES E INICIALIZACAO
+----------------------------------------------------------------------
+addNodes(EXPLORER_TREE, 0, nil)
+refreshVisibility()
+
+explorerHeader.InputBegan:Connect(function(input)
+	beginPointer(input, "header")
+end)
+propsHeader.InputBegan:Connect(function(input)
+	beginPointer(input, "header")
+end)
+props.InputBegan:Connect(function(input)
+	beginPointer(input, "header")
+end)
+tab.InputBegan:Connect(function(input)
+	beginPointer(input, "tab")
+end)
+scroll.InputBegan:Connect(function(input)
+	beginPointer(input, "list")
+end)
+
+UserInputService.InputChanged:Connect(onInputChanged)
+UserInputService.InputEnded:Connect(onInputEnded)
+UserInputService.WindowFocusReleased:Connect(endPointer)
+
+gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyLayout)
+applyLayout()
+]]></ProtectedString>
+				</Properties>
+			</Item>
+		</Item>
+	</Item>
+</roblox>
